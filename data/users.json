@@ -1,0 +1,22 @@
+[
+    {
+        "id": "u1",
+        "name": "Alex Morgan",
+        "email": "alex@demo.com",
+        "password": "$2b$10$BUghXcsxq74YP.S.Ztd0AeTM7PR3usEuGvv2OR9HuBpgpgjD0RYFG",
+        "role": "freelancer",
+        "avatar": null,
+        "bio": "Full-stack developer with 5+ years of experience in React, Node.js, and cloud architecture.",
+        "createdAt": "2024-01-15T10:00:00Z"
+    },
+    {
+        "id": "u2",
+        "name": "Jordan Lee",
+        "email": "jordan@demo.com",
+        "password": "$2b$10$BUghXcsxq74YP.S.Ztd0AeTM7PR3usEuGvv2OR9HuBpgpgjD0RYFG",
+        "role": "client",
+        "avatar": null,
+        "bio": "Startup founder looking for talented freelancers to bring my ideas to life.",
+        "createdAt": "2024-01-20T14:30:00Z"
+    }
+]
