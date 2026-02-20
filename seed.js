@@ -96,13 +96,6 @@ const indianFreelancers = [
     bio: "Video editor and motion graphics artist",
     skills: ["Video Editing", "After Effects", "Premiere Pro", "Motion Graphics"],
     location: "Delhi, NCR"
-  },
-  {
-    name: "Ashmi Naik",
-    email: "ashmi.naik@email.com",
-    bio: "Full-stack web developer specializing in modern web technologies and responsive design",
-    skills: ["React", "Next.js", "JavaScript", "Tailwind CSS", "Node.js"],
-    location: "Goa, India"
   }
 ];
 
@@ -187,15 +180,6 @@ const indianGigs = [
     category: "Business & Finance",
     deliveryTime: "4 days",
     tags: ["Business Plan", "Financial Analysis", "Market Research", "Startup"]
-  },
-  {
-    title: "Professional Web Development with React & Next.js",
-    description: "I will build a modern, responsive, and high-performance website using React and Next.js. Includes SEO optimization, mobile-first design, API integration, and deployment on Vercel. Perfect for portfolios, landing pages, and web applications.",
-    price: 15000,
-    category: "Web Development",
-    deliveryTime: "7 days",
-    tags: ["React", "Next.js", "Web Development", "Tailwind CSS", "JavaScript"],
-    featured: true
   }
 ];
 
