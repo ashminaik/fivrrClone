@@ -184,3 +184,5 @@ src/
 ## Deployment
 
 Deployed on **Vercel** with environment variables configured for MongoDB Atlas, JWT authentication, and Cloudinary image storage.
+
+**Live URL:** [fivrr-clone-dtfs1l1jz-ashminaiks-projects.vercel.app](https://fivrr-clone-dtfs1l1jz-ashminaiks-projects.vercel.app)
