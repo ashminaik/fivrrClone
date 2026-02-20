@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/app/components/AuthProvider';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 
 function getAvatarColor(name) {
     const colors = ['#3b82f6', '#d946ef', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899', '#14b8a6'];
@@ -45,7 +44,6 @@ export default function MessagesPage() {
     const [dataLoading, setDataLoading] = useState(true);
     const [activeOrderId, setActiveOrderId] = useState(null);
 
-    // Chat state for active conversation
     const [messages, setMessages] = useState([]);
     const [content, setContent] = useState('');
     const [sendLoading, setSendLoading] = useState(false);
@@ -57,7 +55,7 @@ export default function MessagesPage() {
         if (!loading && !user) router.push('/login');
     }, [loading, user, router]);
 
-    // Fetch all conversations
+    // Fetch all conversations — grouped by the other person
     useEffect(() => {
         if (!user) return;
 
@@ -74,16 +72,18 @@ export default function MessagesPage() {
                     ...(Array.isArray(sellerOrders) ? sellerOrders : []),
                 ];
 
+                // Deduplicate orders by id
                 const uniqueOrders = [];
-                const seen = new Set();
+                const seenIds = new Set();
                 for (const o of allOrders) {
-                    if (!seen.has(o.id)) {
-                        seen.add(o.id);
+                    if (!seenIds.has(o.id)) {
+                        seenIds.add(o.id);
                         uniqueOrders.push(o);
                     }
                 }
 
-                const convos = await Promise.all(
+                // Fetch messages and gig info for all orders
+                const orderDetails = await Promise.all(
                     uniqueOrders.map(async (order) => {
                         const [msgsRes, gigRes] = await Promise.all([
                             fetch(`/api/messages?orderId=${order.id}`),
@@ -91,33 +91,70 @@ export default function MessagesPage() {
                         ]);
                         const msgs = await msgsRes.json().catch(() => []);
                         const gig = gigRes ? await gigRes.json().catch(() => null) : null;
-
-                        const otherId = order.buyerId === user.id ? order.sellerId : order.buyerId;
-                        let otherName = 'User';
-                        try {
-                            const uRes = await fetch(`/api/users?id=${otherId}`);
-                            const uData = await uRes.json();
-                            if (uData?.name) otherName = uData.name;
-                        } catch {}
-
                         const messageList = Array.isArray(msgs) ? msgs : [];
                         const lastMsg = messageList.length > 0 ? messageList[messageList.length - 1] : null;
 
                         return {
-                            orderId: order.id,
-                            orderStatus: order.status,
-                            gigTitle: gig?.title || 'Unknown Service',
-                            otherName,
-                            otherId,
-                            lastMessage: lastMsg?.content || null,
-                            lastMessageTime: lastMsg?.createdAt || order.createdAt,
-                            messageCount: messageList.length,
-                            isBuyer: order.buyerId === user.id,
-                            buyerId: order.buyerId,
-                            sellerId: order.sellerId,
+                            order,
+                            gig,
+                            messageList,
+                            lastMsg,
                         };
                     })
                 );
+
+                // Group by the other person's ID — pick the order with the most recent message
+                const groupedByPerson = {};
+                for (const detail of orderDetails) {
+                    const { order, gig, messageList, lastMsg } = detail;
+                    const otherId = order.buyerId === user.id ? order.sellerId : order.buyerId;
+                    const lastTime = lastMsg?.createdAt || order.createdAt;
+
+                    if (!groupedByPerson[otherId]) {
+                        groupedByPerson[otherId] = { detail, lastTime, totalMessages: messageList.length, allOrderIds: [order.id] };
+                    } else {
+                        groupedByPerson[otherId].allOrderIds.push(order.id);
+                        groupedByPerson[otherId].totalMessages += messageList.length;
+                        // Keep the one with the most recent activity
+                        if (new Date(lastTime) > new Date(groupedByPerson[otherId].lastTime)) {
+                            groupedByPerson[otherId].detail = detail;
+                            groupedByPerson[otherId].lastTime = lastTime;
+                        }
+                    }
+                }
+
+                // Fetch names for each unique person
+                const personIds = Object.keys(groupedByPerson);
+                const nameMap = {};
+                await Promise.all(
+                    personIds.map(async (id) => {
+                        try {
+                            const uRes = await fetch(`/api/users?id=${id}`);
+                            const uData = await uRes.json();
+                            if (uData?.name) nameMap[id] = uData.name;
+                        } catch {}
+                    })
+                );
+
+                // Build conversation list
+                const convos = personIds.map(otherId => {
+                    const { detail, lastTime, totalMessages, allOrderIds } = groupedByPerson[otherId];
+                    const { order, gig, lastMsg } = detail;
+                    return {
+                        orderId: order.id,
+                        allOrderIds,
+                        orderStatus: order.status,
+                        gigTitle: gig?.title || 'Unknown Service',
+                        otherName: nameMap[otherId] || 'User',
+                        otherId,
+                        lastMessage: lastMsg?.content || null,
+                        lastMessageTime: lastTime,
+                        messageCount: totalMessages,
+                        isBuyer: order.buyerId === user.id,
+                        buyerId: order.buyerId,
+                        sellerId: order.sellerId,
+                    };
+                });
 
                 convos.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
                 setConversations(convos);
@@ -126,8 +163,14 @@ export default function MessagesPage() {
                 const orderParam = typeof window !== 'undefined'
                     ? new URLSearchParams(window.location.search).get('order')
                     : null;
-                if (orderParam && convos.find(c => c.orderId === orderParam)) {
-                    setActiveOrderId(orderParam);
+                if (orderParam) {
+                    // Find conversation that contains this order
+                    const match = convos.find(c => c.allOrderIds.includes(orderParam));
+                    if (match) {
+                        setActiveOrderId(match.orderId);
+                    } else if (convos.length > 0 && !activeOrderId) {
+                        setActiveOrderId(convos[0].orderId);
+                    }
                 } else if (convos.length > 0 && !activeOrderId) {
                     setActiveOrderId(convos[0].orderId);
                 }
@@ -196,7 +239,6 @@ export default function MessagesPage() {
                 const msg = await res.json();
                 setMessages(prev => [...prev, msg]);
                 setContent('');
-                // Update last message in conversations list
                 setConversations(prev => prev.map(c =>
                     c.orderId === activeOrderId
                         ? { ...c, lastMessage: content.trim(), lastMessageTime: new Date().toISOString(), messageCount: c.messageCount + 1 }
@@ -260,7 +302,7 @@ export default function MessagesPage() {
                             <div className="chat-sidebar-list">
                                 {conversations.map(convo => (
                                     <div
-                                        key={convo.orderId}
+                                        key={convo.otherId}
                                         className={`chat-sidebar-item ${activeOrderId === convo.orderId ? 'active' : ''}`}
                                         onClick={() => setActiveOrderId(convo.orderId)}
                                     >

@@ -19,11 +19,11 @@ export default function ChatButton({ gigId, sellerId, price }) {
 
         setLoading(true);
         try {
-            // Check if there's already an order for this gig from this user
+            // Check if there's already ANY order between this buyer and seller
             const res = await fetch(`/api/orders?buyerId=${user.id}`);
             const orders = await res.json();
             const existing = Array.isArray(orders)
-                ? orders.find(o => o.gigId === gigId)
+                ? orders.find(o => o.sellerId === sellerId)
                 : null;
 
             if (existing) {
