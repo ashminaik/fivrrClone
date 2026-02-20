@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '@/app/components/AuthProvider';
 import { useRouter } from 'next/navigation';
 
-export default function ChatButton({ gigId, sellerId }) {
+export default function ChatButton({ gigId, sellerId, price }) {
     const { user } = useAuth();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
@@ -27,7 +27,7 @@ export default function ChatButton({ gigId, sellerId }) {
                 : null;
 
             if (existing) {
-                router.push(`/messages?order=${existing.id}`);
+                window.location.href = `/messages?order=${existing.id}`;
                 return;
             }
 
@@ -39,13 +39,13 @@ export default function ChatButton({ gigId, sellerId }) {
                     gigId,
                     buyerId: user.id,
                     sellerId,
-                    status: 'pending',
+                    price: price || 0,
                 }),
             });
 
             if (orderRes.ok) {
                 const order = await orderRes.json();
-                router.push(`/messages?order=${order.id}`);
+                window.location.href = `/messages?order=${order.id}`;
             }
         } catch (err) {
             console.error('Chat init failed', err);

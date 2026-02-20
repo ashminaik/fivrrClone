@@ -108,7 +108,7 @@ export default async function GigDetailPage({ params }) {
                         </div>
 
                         <OrderButton gigId={gig.id} sellerId={gig.sellerId} price={gig.price} />
-                        <ChatButton gigId={gig.id} sellerId={gig.sellerId} />
+                        <ChatButton gigId={gig.id} sellerId={gig.sellerId} price={gig.price} />
 
                         <p style={{ textAlign: 'center', fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.75rem' }}>
                             Secure checkout • Money-back guarantee
