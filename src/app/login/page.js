@@ -88,7 +88,7 @@ export default function LoginPage() {
                 </form>
 
                 <div className="auth-footer">
-                    Don&​apos;t have an account? <Link href="/signup">Sign up</Link>
+                    {"Don't have an account? "}<Link href="/signup">Sign up</Link>
                 </div>
 
                 <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f0fdf4', borderRadius: '10px', fontSize: '0.8rem', color: '#065f46' }}>
