@@ -42,7 +42,7 @@ export default function MessagesPage() {
     const router = useRouter();
     const [conversations, setConversations] = useState([]);
     const [dataLoading, setDataLoading] = useState(true);
-    const [activeOrderId, setActiveOrderId] = useState(null);
+    const [activeConvoId, setActiveConvoId] = useState(null);
 
     const [messages, setMessages] = useState([]);
     const [content, setContent] = useState('');
@@ -94,16 +94,11 @@ export default function MessagesPage() {
                         const messageList = Array.isArray(msgs) ? msgs : [];
                         const lastMsg = messageList.length > 0 ? messageList[messageList.length - 1] : null;
 
-                        return {
-                            order,
-                            gig,
-                            messageList,
-                            lastMsg,
-                        };
+                        return { order, gig, messageList, lastMsg };
                     })
                 );
 
-                // Group by the other person's ID — pick the order with the most recent message
+                // Group by the other person — collect ALL order IDs for each person
                 const groupedByPerson = {};
                 for (const detail of orderDetails) {
                     const { order, gig, messageList, lastMsg } = detail;
@@ -111,14 +106,33 @@ export default function MessagesPage() {
                     const lastTime = lastMsg?.createdAt || order.createdAt;
 
                     if (!groupedByPerson[otherId]) {
-                        groupedByPerson[otherId] = { detail, lastTime, totalMessages: messageList.length, allOrderIds: [order.id] };
+                        groupedByPerson[otherId] = {
+                            otherId,
+                            allOrderIds: [order.id],
+                            // Use the order that has messages, or the most recent one
+                            primaryOrderId: order.id,
+                            orderStatus: order.status,
+                            gigTitle: gig?.title || 'Unknown Service',
+                            lastMessage: lastMsg?.content || null,
+                            lastMessageTime: lastTime,
+                            totalMessages: messageList.length,
+                            isBuyer: order.buyerId === user.id,
+                            buyerId: order.buyerId,
+                            sellerId: order.sellerId,
+                        };
                     } else {
                         groupedByPerson[otherId].allOrderIds.push(order.id);
                         groupedByPerson[otherId].totalMessages += messageList.length;
-                        // Keep the one with the most recent activity
-                        if (new Date(lastTime) > new Date(groupedByPerson[otherId].lastTime)) {
-                            groupedByPerson[otherId].detail = detail;
-                            groupedByPerson[otherId].lastTime = lastTime;
+                        // Prefer the order with messages or with the most recent activity
+                        if (new Date(lastTime) > new Date(groupedByPerson[otherId].lastMessageTime)) {
+                            groupedByPerson[otherId].primaryOrderId = order.id;
+                            groupedByPerson[otherId].orderStatus = order.status;
+                            groupedByPerson[otherId].gigTitle = gig?.title || groupedByPerson[otherId].gigTitle;
+                            groupedByPerson[otherId].lastMessage = lastMsg?.content || groupedByPerson[otherId].lastMessage;
+                            groupedByPerson[otherId].lastMessageTime = lastTime;
+                            groupedByPerson[otherId].isBuyer = order.buyerId === user.id;
+                            groupedByPerson[otherId].buyerId = order.buyerId;
+                            groupedByPerson[otherId].sellerId = order.sellerId;
                         }
                     }
                 }
@@ -138,21 +152,10 @@ export default function MessagesPage() {
 
                 // Build conversation list
                 const convos = personIds.map(otherId => {
-                    const { detail, lastTime, totalMessages, allOrderIds } = groupedByPerson[otherId];
-                    const { order, gig, lastMsg } = detail;
+                    const data = groupedByPerson[otherId];
                     return {
-                        orderId: order.id,
-                        allOrderIds,
-                        orderStatus: order.status,
-                        gigTitle: gig?.title || 'Unknown Service',
+                        ...data,
                         otherName: nameMap[otherId] || 'User',
-                        otherId,
-                        lastMessage: lastMsg?.content || null,
-                        lastMessageTime: lastTime,
-                        messageCount: totalMessages,
-                        isBuyer: order.buyerId === user.id,
-                        buyerId: order.buyerId,
-                        sellerId: order.sellerId,
                     };
                 });
 
@@ -164,15 +167,14 @@ export default function MessagesPage() {
                     ? new URLSearchParams(window.location.search).get('order')
                     : null;
                 if (orderParam) {
-                    // Find conversation that contains this order
                     const match = convos.find(c => c.allOrderIds.includes(orderParam));
                     if (match) {
-                        setActiveOrderId(match.orderId);
-                    } else if (convos.length > 0 && !activeOrderId) {
-                        setActiveOrderId(convos[0].orderId);
+                        setActiveConvoId(match.otherId);
+                    } else if (convos.length > 0 && !activeConvoId) {
+                        setActiveConvoId(convos[0].otherId);
                     }
-                } else if (convos.length > 0 && !activeOrderId) {
-                    setActiveOrderId(convos[0].orderId);
+                } else if (convos.length > 0 && !activeConvoId) {
+                    setActiveConvoId(convos[0].otherId);
                 }
             } catch (err) {
                 console.error('Error fetching conversations:', err);
@@ -184,33 +186,40 @@ export default function MessagesPage() {
         fetchConversations();
     }, [user]);
 
-    // Fetch messages for active conversation
+    const activeConvo = conversations.find(c => c.otherId === activeConvoId);
+
+    // Fetch messages for ALL orders in the active conversation
     const fetchMessages = useCallback(async () => {
-        if (!activeOrderId) return;
+        if (!activeConvo) return;
         try {
-            const res = await fetch(`/api/messages?orderId=${activeOrderId}`);
-            const msgs = await res.json();
-            if (Array.isArray(msgs)) {
-                setMessages(prev => {
-                    if (msgs.length !== prev.length) return msgs;
-                    return prev;
-                });
-            }
+            // Fetch messages from all orders with this person
+            const allMsgs = await Promise.all(
+                activeConvo.allOrderIds.map(async (orderId) => {
+                    const res = await fetch(`/api/messages?orderId=${orderId}`);
+                    const msgs = await res.json();
+                    return Array.isArray(msgs) ? msgs : [];
+                })
+            );
+            const combined = allMsgs.flat().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            setMessages(prev => {
+                if (combined.length !== prev.length) return combined;
+                return prev;
+            });
         } catch {}
-    }, [activeOrderId]);
+    }, [activeConvo]);
 
     useEffect(() => {
-        if (!activeOrderId) return;
+        if (!activeConvo) return;
         setChatLoading(true);
         fetchMessages().finally(() => setChatLoading(false));
-    }, [activeOrderId, fetchMessages]);
+    }, [activeConvoId, fetchMessages]);
 
     // Poll for new messages every 3 seconds
     useEffect(() => {
-        if (!activeOrderId) return;
+        if (!activeConvo) return;
         pollRef.current = setInterval(fetchMessages, 3000);
         return () => clearInterval(pollRef.current);
-    }, [activeOrderId, fetchMessages]);
+    }, [activeConvo, fetchMessages]);
 
     // Auto-scroll to bottom on new messages
     useEffect(() => {
@@ -218,18 +227,17 @@ export default function MessagesPage() {
     }, [messages]);
 
     const sendMessage = async () => {
-        if (!content.trim() || !activeOrderId || !user) return;
-        const convo = conversations.find(c => c.orderId === activeOrderId);
-        if (!convo) return;
+        if (!content.trim() || !activeConvo || !user) return;
 
         setSendLoading(true);
         try {
-            const receiverId = convo.isBuyer ? convo.sellerId : convo.buyerId;
+            const receiverId = activeConvo.otherId;
+            // Send on the primary (most recent) order
             const res = await fetch('/api/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    orderId: activeOrderId,
+                    orderId: activeConvo.primaryOrderId,
                     senderId: user.id,
                     receiverId,
                     content: content.trim(),
@@ -240,8 +248,8 @@ export default function MessagesPage() {
                 setMessages(prev => [...prev, msg]);
                 setContent('');
                 setConversations(prev => prev.map(c =>
-                    c.orderId === activeOrderId
-                        ? { ...c, lastMessage: content.trim(), lastMessageTime: new Date().toISOString(), messageCount: c.messageCount + 1 }
+                    c.otherId === activeConvoId
+                        ? { ...c, lastMessage: content.trim(), lastMessageTime: new Date().toISOString(), totalMessages: c.totalMessages + 1 }
                         : c
                 ));
             }
@@ -251,8 +259,6 @@ export default function MessagesPage() {
             setSendLoading(false);
         }
     };
-
-    const activeConvo = conversations.find(c => c.orderId === activeOrderId);
 
     if (loading || dataLoading) {
         return (
@@ -303,8 +309,8 @@ export default function MessagesPage() {
                                 {conversations.map(convo => (
                                     <div
                                         key={convo.otherId}
-                                        className={`chat-sidebar-item ${activeOrderId === convo.orderId ? 'active' : ''}`}
-                                        onClick={() => setActiveOrderId(convo.orderId)}
+                                        className={`chat-sidebar-item ${activeConvoId === convo.otherId ? 'active' : ''}`}
+                                        onClick={() => setActiveConvoId(convo.otherId)}
                                     >
                                         <div
                                             className="avatar"

@@ -56,9 +56,33 @@ const OrderSchema = new mongoose.Schema({
   createdAt: { type: String, required: true }
 });
 
+// Message Schema
+const MessageSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  orderId: { type: String, required: true },
+  senderId: { type: String, required: true },
+  receiverId: { type: String, required: true },
+  content: { type: String, required: true },
+  createdAt: { type: String, required: true }
+});
+
+// Review Schema
+const ReviewSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  orderId: { type: String, required: true },
+  gigId: { type: String, required: true },
+  buyerId: { type: String, required: true },
+  sellerId: { type: String, required: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  comment: { type: String, default: '' },
+  createdAt: { type: String, required: true }
+});
+
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 const Gig = mongoose.models.Gig || mongoose.model('Gig', GigSchema);
 const Order = mongoose.models.Order || mongoose.model('Order', OrderSchema);
+const Message = mongoose.models.Message || mongoose.model('Message', MessageSchema);
+const Review = mongoose.models.Review || mongoose.model('Review', ReviewSchema);
 
 // Indian Data
 const indianFreelancers = [
@@ -192,6 +216,8 @@ async function seedDatabase() {
     await User.deleteMany({});
     await Gig.deleteMany({});
     await Order.deleteMany({});
+    await Message.deleteMany({});
+    await Review.deleteMany({});
 
     console.log('Cleared existing data');
 
